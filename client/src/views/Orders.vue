@@ -27,6 +27,55 @@
         </div>
       </div>
 
+      <div v-if="restockingOrders.length > 0" class="card restock-card">
+        <div class="card-header">
+          <h3 class="card-title">
+            Submitted Restocking Orders
+            <span class="badge warning restock-count-badge">{{ restockingOrders.length }}</span>
+          </h3>
+        </div>
+        <div class="table-container">
+          <table class="orders-table restock-table">
+            <thead>
+              <tr>
+                <th class="col-order-number">Order #</th>
+                <th class="col-items">Items</th>
+                <th class="col-value">Total Cost</th>
+                <th class="col-status">Status</th>
+                <th class="col-date">Order Date</th>
+                <th class="col-date">Expected Delivery</th>
+                <th class="col-lead">Lead Time</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr v-for="order in restockingOrders" :key="order.id">
+                <td class="col-order-number"><strong>{{ order.order_number }}</strong></td>
+                <td class="col-items">
+                  <details class="items-details">
+                    <summary class="items-summary">
+                      {{ order.items.length }} item{{ order.items.length !== 1 ? 's' : '' }}
+                    </summary>
+                    <div class="items-dropdown restock-dropdown">
+                      <div v-for="item in order.items" :key="item.item_sku" class="item-entry">
+                        <span class="item-name">{{ item.item_name }}</span>
+                        <span class="item-meta">Qty: {{ item.quantity }} @ {{ formatCurrency(item.unit_cost) }} &mdash; Lead time: {{ item.lead_time_days }} days</span>
+                      </div>
+                    </div>
+                  </details>
+                </td>
+                <td class="col-value"><strong>{{ formatCurrency(order.total_cost) }}</strong></td>
+                <td class="col-status">
+                  <span class="badge warning">{{ order.status }}</span>
+                </td>
+                <td class="col-date">{{ formatDate(order.order_date) }}</td>
+                <td class="col-date">{{ formatDate(order.expected_delivery_date) }}</td>
+                <td class="col-lead">{{ getOrderLeadTime(order) }} days</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+
       <div class="card">
         <div class="card-header">
           <h3 class="card-title">{{ t('orders.allOrders') }} ({{ orders.length }})</h3>
@@ -95,6 +144,7 @@ export default {
     const loading = ref(true)
     const error = ref(null)
     const orders = ref([])
+    const restockingOrders = ref([])
 
     // Use shared filters
     const {
@@ -104,6 +154,14 @@ export default {
       selectedStatus,
       getCurrentFilters
     } = useFilters()
+
+    const loadRestockingOrders = async () => {
+      try {
+        restockingOrders.value = await api.getRestockingOrders()
+      } catch (err) {
+        console.error('Failed to load restocking orders:', err)
+      }
+    }
 
     const loadOrders = async () => {
       try {
@@ -143,6 +201,15 @@ export default {
       return statusMap[status] || 'info'
     }
 
+    const formatCurrency = (value) => {
+      return value.toLocaleString('en-US', { style: 'currency', currency: 'USD', maximumFractionDigits: 0 })
+    }
+
+    const getOrderLeadTime = (order) => {
+      if (!order.items || order.items.length === 0) return 0
+      return Math.max(...order.items.map(item => item.lead_time_days))
+    }
+
     const formatDate = (dateString) => {
       const { currentLocale } = useI18n()
       const locale = currentLocale.value === 'ja' ? 'ja-JP' : 'en-US'
@@ -153,16 +220,22 @@ export default {
       })
     }
 
-    onMounted(loadOrders)
+    onMounted(() => {
+      loadOrders()
+      loadRestockingOrders()
+    })
 
     return {
       t,
       loading,
       error,
       orders,
+      restockingOrders,
       getOrdersByStatus,
       getOrderStatusClass,
       formatDate,
+      formatCurrency,
+      getOrderLeadTime,
       currencySymbol,
       translateProductName,
       translateCustomerName
@@ -275,5 +348,25 @@ export default {
 .item-meta {
   font-size: 0.813rem;
   color: #64748b;
+}
+
+/* Restocking orders section */
+.restock-card {
+  margin-bottom: 1.5rem;
+  border-left: 3px solid #f59e0b;
+}
+
+.restock-count-badge {
+  margin-left: 0.5rem;
+  font-size: 0.75rem;
+  vertical-align: middle;
+}
+
+.restock-table .col-lead {
+  width: 110px;
+}
+
+.restock-dropdown {
+  min-width: 340px;
 }
 </style>
